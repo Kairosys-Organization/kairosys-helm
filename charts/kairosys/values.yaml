@@ -1,0 +1,180 @@
+# =============================================================================
+# kairosys — values
+#
+# Required (no default — must be supplied via a values file or --set):
+#   global.imageRegistry
+#   gateway.certificateArn           (if HTTPS desired)
+#   opsAgent.config.AZURE_OPENAI_ENDPOINT
+#   opsAgent.config.CONFLUENCE_URL
+#   opsAgent.config.DATABRICKS_HOST
+#   opsAgent.config.SERVICENOW_INSTANCE
+#   opsAgent.config.SERVICENOW_USER
+#   opsAgent.secrets                 (API keys, tokens, etc.)
+#   postgres.secrets                 (DB credentials)
+#
+# Each workload exposes enabled / replicaCount / image / resources; env, ports,
+# probes, and volumes are held in templates verbatim.
+# =============================================================================
+
+# Image registry prefix combined with each app's image.repository (apps only;
+# public images like postgres/rabbitmq/jaeger/otel-collector bypass this).
+global:
+  imageRegistry: ""
+
+jaeger:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: jaegertracing/all-in-one
+    tag: latest
+    pullPolicy: Always
+  resources: {}
+
+otelCollector:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: otel/opentelemetry-collector-contrib
+    tag: latest
+    pullPolicy: Always
+  resources: {}
+
+postgres:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: postgres
+    tag: 16.3-alpine
+    pullPolicy: IfNotPresent
+  resources:
+    limits:
+      cpu: "1"
+      memory: 2Gi
+    requests:
+      cpu: 250m
+      memory: 512Mi
+  dbUser: pathfinder
+  dbName: pathfinder
+  # Rendered into Secret `postgres` and consumed via envFrom. Required.
+  # Example:
+  #   secrets:
+  #     POSTGRES_USER: pathfinder
+  #     POSTGRES_DB: pathfinder
+  #     POSTGRES_PASSWORD: <set me>
+  secrets: {}
+
+rabbitmq:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: rabbitmq
+    tag: 3-management
+    pullPolicy: IfNotPresent
+  resources: {}
+
+opsAgent:
+  enabled: true
+  replicaCount: 1
+  # Combined with global.imageRegistry → ${imageRegistry}/${repository}:${tag}
+  image:
+    repository: kairosysv1
+    tag: latest
+    pullPolicy: Always
+  resources:
+    limits:
+      cpu: "1"
+      memory: 2Gi
+    requests:
+      cpu: 250m
+      memory: 512Mi
+  # Non-secret env. Rendered into ConfigMap `ops-agent` and consumed via envFrom.
+  # Env-specific values (Azure/Confluence/ServiceNow/Databricks endpoints) must
+  # be supplied; non-env defaults (LOG_LEVEL, OTEL_*, etc.) are pre-set here.
+  config:
+    # --- env-specific (required) ---
+    AZURE_OPENAI_ENDPOINT: ""
+    CONFLUENCE_URL: ""
+    DATABRICKS_HOST: ""
+    SERVICENOW_INSTANCE: ""
+    SERVICENOW_USER: ""
+    # --- non-env defaults ---
+    AZURE_OPENAI_API_VERSION: "2024-10-21"
+    AZURE_OPENAI_DEPLOYMENT_NAME: gpt-4o
+    INCIDENT_DEDUP_EMBEDDING_MODEL: BAAI/bge-m3
+    INCIDENT_DEDUP_FAISS_ENABLED: "false"
+    INCIDENT_DEDUP_TTL_SECONDS: "3600"
+    LOG_LEVEL: INFO
+    OPENAI_MODEL: gpt-4o-mini
+    OTEL_DEDUP_TTL_SECONDS: "300"
+    OTEL_ENABLE_GRPC: "true"
+    OTEL_ENABLE_HTTP: "false"
+    OTEL_ERROR_ONLY: "true"
+    OTEL_FLUSH_DELAY_SECONDS: "5.0"
+    OTEL_GRPC_PORT: "4313"
+    OTEL_HTTP_PORT: "4318"
+    OTEL_MAX_SPANS_PER_TRACE: "500"
+    PORT: "8080"
+    RESULT_OUTPUT_TIMEOUT: "30"
+    SLACK_BOT_DEFAULT_CHANNEL: "#on-call"
+    SLACK_BOT_ENABLED: "false"
+    SLACK_ENABLE_NOTIFICATIONS: "true"
+    TEAMS_BOT_ENABLED: "false"
+    TEAMS_ENABLE_NOTIFICATIONS: "true"
+    TMPDIR: /tmp/ops-agent
+    WEB_SLACK_BOT_ENABLED: "true"
+    WEBAPP_ANGULAR_CODE_DIR: /code/webapp/pathfinder-ui/src
+    WEBAPP_CODE_READER_DEPTH: low
+    WEBAPP_CODE_SEARCH_PROVIDER: text
+    WEBAPP_DOTNET_CODE_DIR: /code/webapp/pathfinder-api
+    WEBAPP_ENABLED: "true"
+    WEBAPP_SLACK_DEFAULT_CHANNEL: "#on-call"
+    WEBAPP_SLACK_ENABLE_NOTIFICATIONS: "true"
+    WEBAPP_TEAMS_ENABLE_NOTIFICATIONS: "true"
+  # Rendered into Secret `ops-agent` and consumed via envFrom. Required.
+  # Example keys: AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_OPENAI_API_KEY,
+  # AZURE_SUBSCRIPTION_ID, AZURE_TENANT_ID, CONFLUENCE_CLIENT_ID,
+  # CONFLUENCE_CLIENT_SECRET, DATABRICKS_TOKEN, SERVICENOW_USER_PASSWORD,
+  # SLACK_BOT_BOT_TOKEN, SLACK_BOT_SIGNING_SECRET, STUDIO_DB_URL,
+  # WEBAPP_TEAMS_WEBHOOK_URL, WEB_SLACK_BOT_BOT_TOKEN,
+  # WEB_SLACK_BOT_SIGNING_SECRET
+  secrets: {}
+
+pathfinderStudio:
+  enabled: true
+  replicaCount: 1
+  # Combined with global.imageRegistry → ${imageRegistry}/${repository}:${tag}
+  image:
+    repository: kairosys-studio
+    tag: latest
+    pullPolicy: Always
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 250m
+      memory: 256Mi
+  # Upstream URL the studio's nginx proxies /api/* to. The default uses the
+  # bare service name `ops-agent`, which resolves to the same namespace the
+  # chart is installed in — so the chart works in any namespace.
+  opsAgentUpstream: http://ops-agent:8080
+  # Rendered into ConfigMap `pathfinder-studio` and consumed via envFrom.
+  config:
+    VITE_API_URL: http://ops-agent:8080
+    VITE_APP_TITLE: Kairosys Studio
+    VITE_DEBUG: "false"
+    VITE_LOG_LEVEL: info
+
+gateway:
+  enabled: true
+  # GatewayClass that implements this Gateway (e.g. `alb` from AWS LBC v2.13+).
+  gatewayClassName: alb
+  scheme: internet-facing
+  # AWS LBC v2.13.0 Gateway implementation panics with `ip` target type
+  # (NPE in buildTargetGroupHealthCheckPath). Using `instance` + NodePort
+  # services as a workaround until a newer controller version.
+  targetType: instance
+  # ACM cert ARN used for the HTTPS listener. Set to "" to skip HTTPS.
+  certificateArn: ""
+  # Hostname listeners attach to. "" = match any host.
+  hostname: ""

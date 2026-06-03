@@ -1,0 +1,100 @@
+{{- if .Values.gateway.enabled }}
+{{- if .Values.gateway.certificateArn }}
+apiVersion: gateway.k8s.aws/v1beta1
+kind: LoadBalancerConfiguration
+metadata:
+  name: kairosys-gateway-config
+spec:
+  listenerConfigurations:
+    - protocolPort: HTTPS:443
+      certificates:
+        - {{ .Values.gateway.certificateArn | quote }}
+---
+{{- end }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: kairosys-gateway
+  annotations:
+    alb.gateway.kubernetes.io/scheme: {{ .Values.gateway.scheme }}
+    alb.gateway.kubernetes.io/target-type: {{ .Values.gateway.targetType }}
+spec:
+  gatewayClassName: {{ .Values.gateway.gatewayClassName }}
+  {{- if .Values.gateway.certificateArn }}
+  infrastructure:
+    parametersRef:
+      group: gateway.k8s.aws
+      kind: LoadBalancerConfiguration
+      name: kairosys-gateway-config
+  {{- end }}
+  listeners:
+    - name: http
+      port: 80
+      protocol: HTTP
+      {{- with .Values.gateway.hostname }}
+      hostname: {{ . }}
+      {{- end }}
+      allowedRoutes:
+        namespaces:
+          from: Same
+    {{- if .Values.gateway.certificateArn }}
+    - name: https
+      port: 443
+      protocol: HTTPS
+      {{- with .Values.gateway.hostname }}
+      hostname: {{ . }}
+      {{- end }}
+      tls:
+        mode: Terminate
+        # The actual cert is supplied via the LoadBalancerConfiguration above
+        # (referenced by spec.infrastructure.parametersRef). The options block
+        # below only exists to satisfy Gateway API schema validation that
+        # requires `certificateRefs` or `options` when mode=Terminate.
+        options:
+          alb.gateway.kubernetes.io/cert-via-lbc: "true"
+      allowedRoutes:
+        namespaces:
+          from: Same
+    {{- end }}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: kairosys-routes
+spec:
+  parentRefs:
+    - name: kairosys-gateway
+  {{- with .Values.gateway.hostname }}
+  hostnames:
+    - {{ . | quote }}
+  {{- end }}
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /jaeger
+      backendRefs:
+        - name: jaeger
+          port: 16686
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /v1
+      backendRefs:
+        - name: otel-collector
+          port: 4318
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /studio
+      backendRefs:
+        - name: pathfinder-studio
+          port: 80
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: pathfinder-studio
+          port: 80
+{{- end }}

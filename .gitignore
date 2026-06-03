@@ -1,0 +1,10 @@
+# Helm
+*.tgz
+charts/*/charts/
+
+# Local overrides
+values-local.yaml
+secrets.yaml
+
+# OS
+.DS_Store

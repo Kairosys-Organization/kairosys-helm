@@ -1,0 +1,146 @@
+{{- if .Values.otelCollector.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector-config
+  labels:
+    app: otel-collector
+data:
+  config.yaml: |
+    extensions:
+      health_check:
+        endpoint: 0.0.0.0:13133
+
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+            cors:
+              allowed_origins:
+                - "http://localhost:4200"
+                - "http://localhost:4201"
+                - "http://localhost"
+                - "http://pathfinder.localhost"
+                - "http://*.pathfinder.localhost"
+              allowed_headers:
+                - "Content-Type"
+                - "Content-Encoding"
+                - "Accept"
+                - "traceparent"
+                - "tracestate"
+                - "baggage"
+
+    processors:
+      batch/jaeger:
+        timeout: 5s
+        send_batch_size: 512
+
+      tail_sampling/custom:
+        decision_wait: 10s
+        num_traces: 10000
+        policies:
+          - name: always-sample
+            type: always_sample
+
+    exporters:
+      otlp/jaeger:
+        endpoint: jaeger:4317
+        tls:
+          insecure: true
+
+      otlp/custom:
+        endpoint: ops-agent:4313
+        tls:
+          insecure: true
+        wait_for_ready: true
+
+      file/custom:
+        path: /data/custom-traces.json
+
+      debug:
+        verbosity: detailed
+
+    service:
+      extensions: [health_check]
+      pipelines:
+        traces/jaeger:
+          receivers:  [otlp]
+          processors: [batch/jaeger]
+          exporters:  [otlp/jaeger, file/custom, debug]
+
+        traces/custom:
+          receivers:  [otlp]
+          processors: [tail_sampling/custom]
+          exporters:  [otlp/custom]
+
+      telemetry:
+        logs:
+          level: info
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-collector
+  labels:
+    app: otel-collector
+spec:
+  replicas: {{ .Values.otelCollector.replicaCount }}
+  selector:
+    matchLabels:
+      app: otel-collector
+  template:
+    metadata:
+      labels:
+        app: otel-collector
+    spec:
+      containers:
+        - name: otel-collector
+          image: "{{ .Values.otelCollector.image.repository }}:{{ .Values.otelCollector.image.tag }}"
+          imagePullPolicy: {{ .Values.otelCollector.image.pullPolicy }}
+          env:
+            - name: CUSTOM_CONSUMER_ENDPOINT
+              value: ops-agent:4313
+          ports:
+            - containerPort: 4317
+              name: otlp-grpc
+              protocol: TCP
+            - containerPort: 4318
+              name: otlp-http
+              protocol: TCP
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: config
+              mountPath: /etc/otelcol-contrib/config.yaml
+              subPath: config.yaml
+          resources: {{- toYaml .Values.otelCollector.resources | nindent 12 }}
+      volumes:
+        - name: data
+          emptyDir: {}
+        - name: config
+          configMap:
+            name: otel-collector-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector
+  labels:
+    app: otel-collector
+spec:
+  type: NodePort
+  selector:
+    app: otel-collector
+  ports:
+    - name: otlp-grpc
+      port: 4317
+      targetPort: 4317
+      protocol: TCP
+    - name: otlp-http
+      port: 4318
+      targetPort: 4318
+      protocol: TCP
+{{- end }}

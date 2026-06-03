@@ -1,0 +1,104 @@
+{{- if .Values.opsAgent.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ops-agent
+  labels:
+    app: ops-agent
+data:
+{{- range $k, $v := .Values.opsAgent.config }}
+  {{ $k }}: {{ $v | quote }}
+{{- end }}
+{{- if .Values.opsAgent.secrets }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ops-agent
+  labels:
+    app: ops-agent
+type: Opaque
+stringData:
+{{- range $k, $v := .Values.opsAgent.secrets }}
+  {{ $k }}: {{ $v | quote }}
+{{- end }}
+{{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ops-agent
+  labels:
+    app: ops-agent
+spec:
+  replicas: {{ .Values.opsAgent.replicaCount }}
+  selector:
+    matchLabels:
+      app: ops-agent
+  template:
+    metadata:
+      labels:
+        app: ops-agent
+    spec:
+      securityContext:
+        fsGroup: 1000
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: ops-agent
+          image: "{{ .Values.global.imageRegistry }}/{{ .Values.opsAgent.image.repository }}:{{ .Values.opsAgent.image.tag }}"
+          imagePullPolicy: {{ .Values.opsAgent.image.pullPolicy }}
+          envFrom:
+            - configMapRef:
+                name: ops-agent
+            - secretRef:
+                name: ops-agent
+          ports:
+            - containerPort: 8080
+              name: http
+              protocol: TCP
+            - containerPort: 4313
+              name: grpc
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: false
+          resources: {{- toYaml .Values.opsAgent.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ops-agent
+  labels:
+    app: ops-agent
+spec:
+  type: ClusterIP
+  selector:
+    app: ops-agent
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      protocol: TCP
+    - name: grpc
+      port: 4313
+      targetPort: 4313
+      protocol: TCP
+{{- end }}
