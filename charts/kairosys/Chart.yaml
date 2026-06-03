@@ -2,8 +2,8 @@ apiVersion: v2
 name: kairosys
 description: Kairosys platform — deploys the pathfinder namespace workloads (jaeger, otel-collector, postgres, rabbitmq, ops-agent, pathfinder-studio) plus Gateway API routes.
 type: application
-version: 0.1.0
-appVersion: "0.1.0"
+version: 0.2.0
+appVersion: "0.2.0"
 keywords:
   - pathfinder
   - kairosys

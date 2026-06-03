@@ -58,6 +58,15 @@ postgres:
   #     POSTGRES_DB: pathfinder
   #     POSTGRES_PASSWORD: <set me>
   secrets: {}
+  # PVC-backed storage. Default off so casual installs don't surprise-bill an
+  # EBS volume; enable for any environment where DB data must survive pod
+  # restarts.
+  persistence:
+    enabled: false
+    storageClassName: ""    # "" = cluster default (gp2/gp3 on EKS)
+    size: 10Gi
+    accessModes:
+      - ReadWriteOnce
 
 rabbitmq:
   enabled: true
