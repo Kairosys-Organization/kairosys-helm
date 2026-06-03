@@ -117,7 +117,7 @@ spec:
     spec:
       containers:
         - name: pathfinder-studio
-          image: "{{ .Values.global.imageRegistry }}/{{ .Values.pathfinderStudio.image.repository }}:{{ .Values.pathfinderStudio.image.tag }}"
+          image: "{{ .Values.pathfinderStudio.image.repository }}:{{ .Values.pathfinderStudio.image.tag }}"
           imagePullPolicy: {{ .Values.pathfinderStudio.image.pullPolicy }}
           envFrom:
             - configMapRef:

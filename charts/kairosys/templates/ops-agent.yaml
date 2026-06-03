@@ -46,7 +46,7 @@ spec:
         runAsUser: 1000
       containers:
         - name: ops-agent
-          image: "{{ .Values.global.imageRegistry }}/{{ .Values.opsAgent.image.repository }}:{{ .Values.opsAgent.image.tag }}"
+          image: "{{ .Values.opsAgent.image.repository }}:{{ .Values.opsAgent.image.tag }}"
           imagePullPolicy: {{ .Values.opsAgent.image.pullPolicy }}
           envFrom:
             - configMapRef:

@@ -2,7 +2,8 @@
 # kairosys — values
 #
 # Required (no default — must be supplied via a values file or --set):
-#   global.imageRegistry
+#   opsAgent.image.repository        (full URL, e.g. <acct>.dkr.ecr.<region>.amazonaws.com/<repo>)
+#   pathfinderStudio.image.repository
 #   gateway.certificateArn           (if HTTPS desired)
 #   opsAgent.config.AZURE_OPENAI_ENDPOINT
 #   opsAgent.config.CONFLUENCE_URL
@@ -15,11 +16,6 @@
 # Each workload exposes enabled / replicaCount / image / resources; env, ports,
 # probes, and volumes are held in templates verbatim.
 # =============================================================================
-
-# Image registry prefix combined with each app's image.repository (apps only;
-# public images like postgres/rabbitmq/jaeger/otel-collector bypass this).
-global:
-  imageRegistry: ""
 
 jaeger:
   enabled: true
@@ -75,9 +71,9 @@ rabbitmq:
 opsAgent:
   enabled: true
   replicaCount: 1
-  # Combined with global.imageRegistry → ${imageRegistry}/${repository}:${tag}
+  # Full image URL, e.g. <acct>.dkr.ecr.<region>.amazonaws.com/<repo>/kairosysv1
   image:
-    repository: kairosysv1
+    repository: ""
     tag: latest
     pullPolicy: Always
   resources:
@@ -142,9 +138,9 @@ opsAgent:
 pathfinderStudio:
   enabled: true
   replicaCount: 1
-  # Combined with global.imageRegistry → ${imageRegistry}/${repository}:${tag}
+  # Full image URL, e.g. <acct>.dkr.ecr.<region>.amazonaws.com/<repo>/kairosys-studio
   image:
-    repository: kairosys-studio
+    repository: ""
     tag: latest
     pullPolicy: Always
   resources:

@@ -5,6 +5,7 @@ charts/*/charts/
 # Local overrides
 values-local.yaml
 secrets.yaml
+myvalues.yaml
 
 # OS
 .DS_Store
