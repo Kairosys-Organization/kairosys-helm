@@ -36,7 +36,7 @@ spec:
       {{- end }}
       allowedRoutes:
         namespaces:
-          from: Same
+          from: All
     {{- if .Values.gateway.certificateArn }}
     - name: https
       port: 443
@@ -54,7 +54,7 @@ spec:
           alb.gateway.kubernetes.io/cert-via-lbc: "true"
       allowedRoutes:
         namespaces:
-          from: Same
+          from: All
     {{- end }}
 ---
 apiVersion: gateway.networking.k8s.io/v1
