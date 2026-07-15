@@ -77,6 +77,40 @@ rabbitmq:
     pullPolicy: IfNotPresent
   resources: {}
 
+neo4j:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: neo4j
+    tag: 5.24-community
+    pullPolicy: IfNotPresent
+  # Neo4j is memory-hungry — heap + page cache add up quickly. Give it real
+  # limits in production. Community defaults use ~512 MiB heap.
+  resources:
+    limits:
+      cpu: "1"
+      memory: 2Gi
+    requests:
+      cpu: 250m
+      memory: 512Mi
+  # Rendered into Secret `neo4j` and consumed via envFrom. Required.
+  # NEO4J_AUTH takes the form `<user>/<password>` (or `none` for dev-only,
+  # no-auth mode — avoid outside toy clusters). Keep the password in sync
+  # with opsAgent.secrets.NEO4J_PASSWORD below.
+  # Example:
+  #   secrets:
+  #     NEO4J_AUTH: neo4j/<set me>
+  secrets: {}
+  # PVC-backed storage. Default off so casual installs don't surprise-bill an
+  # EBS volume; enable for any environment where graph data must survive pod
+  # restarts.
+  persistence:
+    enabled: false
+    storageClassName: ""    # "" = cluster default (gp2/gp3 on EKS)
+    size: 10Gi
+    accessModes:
+      - ReadWriteOnce
+
 opsAgent:
   enabled: true
   replicaCount: 1
@@ -103,6 +137,10 @@ opsAgent:
     SERVICENOW_INSTANCE: ""
     SERVICENOW_USER: ""
     # --- non-env defaults ---
+    # Neo4j — bare service name resolves to the in-namespace neo4j service.
+    # Bolt is the driver protocol; browser UI is on port 7474 (not proxied).
+    NEO4J_URI: bolt://neo4j:7687
+    NEO4J_USERNAME: neo4j
     AZURE_OPENAI_API_VERSION: "2024-10-21"
     AZURE_OPENAI_DEPLOYMENT_NAME: gpt-4o
     INCIDENT_DEDUP_EMBEDDING_MODEL: BAAI/bge-m3
@@ -138,10 +176,12 @@ opsAgent:
   # Rendered into Secret `ops-agent` and consumed via envFrom. Required.
   # Example keys: AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_OPENAI_API_KEY,
   # AZURE_SUBSCRIPTION_ID, AZURE_TENANT_ID, CONFLUENCE_CLIENT_ID,
-  # CONFLUENCE_CLIENT_SECRET, DATABRICKS_TOKEN, SERVICENOW_USER_PASSWORD,
-  # SLACK_BOT_BOT_TOKEN, SLACK_BOT_SIGNING_SECRET, STUDIO_DB_URL,
-  # WEBAPP_TEAMS_WEBHOOK_URL, WEB_SLACK_BOT_BOT_TOKEN,
+  # CONFLUENCE_CLIENT_SECRET, DATABRICKS_TOKEN, NEO4J_PASSWORD,
+  # SERVICENOW_USER_PASSWORD, SLACK_BOT_BOT_TOKEN, SLACK_BOT_SIGNING_SECRET,
+  # STUDIO_DB_URL, WEBAPP_TEAMS_WEBHOOK_URL, WEB_SLACK_BOT_BOT_TOKEN,
   # WEB_SLACK_BOT_SIGNING_SECRET
+  #
+  # NEO4J_PASSWORD must match the password in neo4j.secrets.NEO4J_AUTH above.
   secrets: {}
 
 pathfinderStudio:

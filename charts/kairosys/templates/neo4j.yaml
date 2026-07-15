@@ -1,0 +1,118 @@
+{{- if .Values.neo4j.enabled }}
+{{- if .Values.neo4j.secrets }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: neo4j
+  labels:
+    app: neo4j
+type: Opaque
+stringData:
+{{- range $k, $v := .Values.neo4j.secrets }}
+  {{ $k }}: {{ $v | quote }}
+{{- end }}
+---
+{{- end }}
+{{- if .Values.neo4j.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: neo4j-data
+  labels:
+    app: neo4j
+spec:
+  accessModes:
+    {{- range .Values.neo4j.persistence.accessModes }}
+    - {{ . }}
+    {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.neo4j.persistence.size | quote }}
+  {{- with .Values.neo4j.persistence.storageClassName }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+---
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: neo4j
+  labels:
+    app: neo4j
+spec:
+  replicas: {{ .Values.neo4j.replicaCount }}
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: neo4j
+  template:
+    metadata:
+      labels:
+        app: neo4j
+    spec:
+      {{- if .Values.neo4j.persistence.enabled }}
+      securityContext:
+        # Official neo4j image runs as uid 7474 (neo4j). fsGroup makes the PV
+        # writable by the group, so the process can chown its data.
+        fsGroup: 7474
+      {{- end }}
+      containers:
+        - name: neo4j
+          image: "{{ .Values.neo4j.image.repository }}:{{ .Values.neo4j.image.tag }}"
+          imagePullPolicy: {{ .Values.neo4j.image.pullPolicy }}
+          envFrom:
+            - secretRef:
+                name: neo4j
+          ports:
+            - name: bolt
+              containerPort: 7687
+              protocol: TCP
+            - name: http
+              containerPort: 7474
+              protocol: TCP
+          livenessProbe:
+            tcpSocket:
+              port: 7687
+            initialDelaySeconds: 60
+            periodSeconds: 15
+            timeoutSeconds: 5
+          readinessProbe:
+            tcpSocket:
+              port: 7687
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 3
+          resources: {{- toYaml .Values.neo4j.resources | nindent 12 }}
+          {{- if .Values.neo4j.persistence.enabled }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          {{- end }}
+      {{- if .Values.neo4j.persistence.enabled }}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: neo4j-data
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: neo4j
+  labels:
+    app: neo4j
+spec:
+  type: ClusterIP
+  selector:
+    app: neo4j
+  ports:
+    - name: bolt
+      port: 7687
+      targetPort: 7687
+      protocol: TCP
+    - name: http
+      port: 7474
+      targetPort: 7474
+      protocol: TCP
+{{- end }}
