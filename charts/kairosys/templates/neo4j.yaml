@@ -51,6 +51,14 @@ spec:
       labels:
         app: neo4j
     spec:
+      # Kubernetes auto-injects service discovery env vars (NEO4J_SERVICE_HOST,
+      # NEO4J_PORT_7687_TCP_PORT, …) into every pod for every same-namespace
+      # service. The Neo4j entrypoint translates any NEO4J_* env var into a
+      # neo4j.conf key by replacing `_` with `.`, so those auto-vars become
+      # invalid config keys and strict validation refuses to start. Disable
+      # service-link injection for this pod — Neo4j doesn't need env-var
+      # service discovery to talk to itself.
+      enableServiceLinks: false
       {{- if .Values.neo4j.persistence.enabled }}
       securityContext:
         # Official neo4j image runs as uid 7474 (neo4j). fsGroup makes the PV
