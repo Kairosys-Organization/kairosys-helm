@@ -219,7 +219,16 @@ gateway:
   # (NPE in buildTargetGroupHealthCheckPath). Using `instance` + NodePort
   # services as a workaround until a newer controller version.
   targetType: instance
-  # ACM cert ARN used for the HTTPS listener. Set to "" to skip HTTPS.
+  # Default ACM cert ARN attached to the HTTPS listener. Set to "" to skip HTTPS.
   certificateArn: ""
-  # Hostname listeners attach to. "" = match any host.
+  # Extra ACM cert ARNs attached as SNI on the same HTTPS listener. Use when
+  # additional HTTPRoutes (in this or other namespaces) serve extra hostnames
+  # off the same ALB.
+  additionalCertificateArns: []
+  # Hostname the LISTENER attaches to. "" = accept any host so multiple
+  # HTTPRoutes on different hostnames can share the listener.
   hostname: ""
+  # Hostnames applied to THIS chart's studio HTTPRoute (kairosys-routes) so
+  # its `/` catch-all only matches these hosts. Leave empty to fall back to
+  # `hostname` (single value) — matches historical behavior.
+  routeHostnames: []

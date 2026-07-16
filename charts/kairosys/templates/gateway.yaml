@@ -7,8 +7,14 @@ metadata:
 spec:
   listenerConfigurations:
     - protocolPort: HTTPS:443
+      # First cert is the ALB default; the rest attach as SNI so extra
+      # hostnames (e.g. userhub.kairosys.ai) served by other HTTPRoutes on
+      # this gateway present the correct cert instead of the default one.
       certificates:
         - {{ .Values.gateway.certificateArn | quote }}
+        {{- range .Values.gateway.additionalCertificateArns }}
+        - {{ . | quote }}
+        {{- end }}
 ---
 {{- end }}
 apiVersion: gateway.networking.k8s.io/v1
@@ -64,9 +70,19 @@ metadata:
 spec:
   parentRefs:
     - name: kairosys-gateway
+  {{- with .Values.gateway.routeHostnames }}
+  # Scope the studio routes (especially the `/` catch-all) to specific
+  # hostnames — otherwise the catch-all would swallow requests intended
+  # for other HTTPRoutes attached to the same gateway (e.g. userhub).
+  hostnames:
+    {{- range . }}
+    - {{ . | quote }}
+    {{- end }}
+  {{- else }}
   {{- with .Values.gateway.hostname }}
   hostnames:
     - {{ . | quote }}
+  {{- end }}
   {{- end }}
   rules:
     - matches:
