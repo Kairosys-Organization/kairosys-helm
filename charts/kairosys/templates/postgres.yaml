@@ -53,9 +53,12 @@ spec:
     spec:
       {{- if .Values.postgres.persistence.enabled }}
       securityContext:
-        # Postgres in the official image runs as uid 70 (postgres). fsGroup
-        # makes the PV writable by the group, so the process can chown its data.
-        fsGroup: 70
+        # fsGroup varies by image lineage:
+        #   postgres:*-alpine        → 70 (BusyBox postgres user)
+        #   postgres:* (Debian)      → 999
+        #   pgvector/pgvector:pg*    → 999 (Debian-derived)
+        # Configurable via values so switching images doesn't break volume perms.
+        fsGroup: {{ .Values.postgres.fsGroup | default 70 }}
       {{- end }}
       containers:
         - name: postgres

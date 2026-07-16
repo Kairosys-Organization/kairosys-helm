@@ -39,9 +39,15 @@ postgres:
   enabled: true
   replicaCount: 1
   image:
-    repository: postgres
-    tag: 16.3-alpine
+    # Use pgvector image so `CREATE EXTENSION vector` succeeds (needed for
+    # semantic search on incidents/rca_reports). Base is postgres:16-bookworm,
+    # so postgres runs as uid 999 — set fsGroup accordingly below.
+    repository: pgvector/pgvector
+    tag: pg16
     pullPolicy: IfNotPresent
+  # Match the postgres UID inside the image. 70 for alpine, 999 for Debian
+  # variants (pgvector/pgvector:pg16 is Debian-based).
+  fsGroup: 999
   resources:
     limits:
       cpu: "1"
