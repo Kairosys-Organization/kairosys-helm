@@ -44,6 +44,17 @@ spec:
         fsGroup: 1000
         runAsNonRoot: true
         runAsUser: 1000
+      # Block ops-agent boot until postgres is ready. Prevents the silent
+      # "Studio API failed to register" race — ops-agent's Flask init hits
+      # the DB during import; if postgres is mid-restart, the exception is
+      # swallowed and every /api/* request 404s until the pod is restarted.
+      initContainers:
+        - name: wait-for-postgres
+          image: postgres:16-alpine
+          command:
+            - sh
+            - -c
+            - 'until pg_isready -h postgres -U pathfinder -d pathfinder; do echo "waiting for postgres..."; sleep 2; done'
       containers:
         - name: ops-agent
           image: "{{ .Values.opsAgent.image.repository }}:{{ .Values.opsAgent.image.tag }}"
@@ -60,13 +71,23 @@ spec:
             - containerPort: 4313
               name: grpc
               protocol: TCP
+          # /health returns 200 even when /api/* isn't registered — useless
+          # as a liveness signal. Probe a real API route instead. Both 200
+          # (registered + unauth-not-required) and 401 (registered + needs
+          # auth) mean the API is up. 404 = the exact broken state → restart.
           livenessProbe:
-            httpGet:
-              path: /health
-              port: 8080
-            initialDelaySeconds: 30
-            periodSeconds: 30
+            exec:
+              command:
+                - sh
+                - -c
+                - |
+                  code=$(wget -qO- -T 3 --server-response http://localhost:8080/api/crews 2>&1 \
+                          | awk '/HTTP\//{print $2; exit}')
+                  case "$code" in 200|401) exit 0 ;; *) exit 1 ;; esac
+            initialDelaySeconds: 60
+            periodSeconds: 60
             timeoutSeconds: 5
+            failureThreshold: 3
           readinessProbe:
             httpGet:
               path: /health
