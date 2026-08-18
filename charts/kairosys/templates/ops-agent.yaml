@@ -75,15 +75,28 @@ spec:
           # as a liveness signal. Probe a real API route instead. Both 200
           # (registered + unauth-not-required) and 401 (registered + needs
           # auth) mean the API is up. 404 = the exact broken state → restart.
+          #
+          # Uses python3, which the runtime image actually ships. The previous
+          # version of this probe shelled out to wget, which is NOT installed:
+          # the command produced an empty status, matched neither 200 nor 401,
+          # and exited 1 on every run — so the probe never once passed and
+          # kubelet killed a healthy pod every ~4 minutes (1,017 restarts).
+          # Anything invoked here must exist in the image; check before changing.
           livenessProbe:
             exec:
               command:
-                - sh
+                - python3
                 - -c
                 - |
-                  code=$(wget -qO- -T 3 --server-response http://localhost:8080/api/crews 2>&1 \
-                          | awk '/HTTP\//{print $2; exit}')
-                  case "$code" in 200|401) exit 0 ;; *) exit 1 ;; esac
+                  import sys, urllib.request, urllib.error
+                  try:
+                      code = urllib.request.urlopen(
+                          "http://localhost:8080/api/crews", timeout=3).status
+                  except urllib.error.HTTPError as e:
+                      code = e.code
+                  except Exception:
+                      sys.exit(1)
+                  sys.exit(0 if code in (200, 401) else 1)
             initialDelaySeconds: 60
             periodSeconds: 60
             timeoutSeconds: 5
