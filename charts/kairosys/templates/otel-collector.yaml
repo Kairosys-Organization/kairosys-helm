@@ -46,10 +46,12 @@ data:
             type: always_sample
 
     exporters:
+      {{- if .Values.jaeger.enabled }}
       otlp/jaeger:
         endpoint: jaeger:4317
         tls:
           insecure: true
+      {{- end }}
 
       otlp/custom:
         endpoint: ops-agent:4313
@@ -66,10 +68,13 @@ data:
     service:
       extensions: [health_check]
       pipelines:
+        # The jaeger exporter is dropped when jaeger.enabled=false — otherwise the
+        # collector retries against a Service that no longer exists and grows its
+        # retry queue in memory, trading one leak for another.
         traces/jaeger:
           receivers:  [otlp]
           processors: [batch/jaeger]
-          exporters:  [otlp/jaeger, file/custom, debug]
+          exporters:  [{{ if .Values.jaeger.enabled }}otlp/jaeger, {{ end }}file/custom, debug]
 
         traces/custom:
           receivers:  [otlp]
