@@ -85,6 +85,7 @@ spec:
   {{- end }}
   {{- end }}
   rules:
+    {{- if .Values.jaeger.enabled }}
     - matches:
         - path:
             type: PathPrefix
@@ -92,6 +93,7 @@ spec:
       backendRefs:
         - name: jaeger
           port: 16686
+    {{- end }}
     - matches:
         - path:
             type: PathPrefix
