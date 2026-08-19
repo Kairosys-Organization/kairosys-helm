@@ -250,10 +250,14 @@ gateway:
       # nginx serving a static file — cheap, no backend work.
       path: /
       interval: 60
-    ops-agent:
-      # Real health endpoint; costs nothing and touches no database.
-      path: /health
+    otel-collector:
+      # The target group fronts the OTLP HTTP port, which answers 404 on `/`.
+      # That failed the default 200-399 matcher, so every target sat unhealthy
+      # and ingest survived only on the ALB's fail-open behaviour. A 404 here
+      # still proves the collector is listening, so accept it.
+      path: /
       interval: 60
+      httpCode: "200-499"
   # GatewayClass that implements this Gateway (e.g. `alb` from AWS LBC v2.13+).
   gatewayClassName: alb
   scheme: internet-facing

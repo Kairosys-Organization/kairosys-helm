@@ -1,18 +1,24 @@
 {{- if .Values.gateway.enabled }}
-{{- $hc := .Values.gateway.healthCheck | default dict }}
 {{- /*
-  The ALB defaults to health-checking `/` every 15s on every target group. For
-  user-hub that means rendering the full CreditFlow dashboard — and its SQL
-  aggregates — 5,760 times a day purely to prove the container is alive, with
-  every hit producing a ~9-span trace. These configs stretch the interval and,
-  where the backend has a cheap endpoint, point at that instead.
+  ALB target-group health checks, one per Service that the Gateway actually
+  routes to. Driven by .Values.gateway.healthCheck so the set can't drift from
+  the real backends the way a hardcoded list does.
 
-  Note on paths: user-hub does not expose actuator, so `/health` and
-  /actuator/health both 404 there. It therefore keeps `/` and relies on the
-  longer interval, while ops-agent has a real `/health` and uses it.
+  Two things this fixes:
+
+  * The controller defaults to `/` every 15s. On user-hub `/` is the CreditFlow
+    dashboard, so each check rendered the page and ran its SQL aggregates —
+    ~5,760 times a day, emitting a ~9-span trace each time, purely to prove the
+    container was alive.
+
+  * otel-collector's target group was checking `/` on the OTLP HTTP port, which
+    answers 404, so all three targets sat unhealthy. Ingest kept working only
+    because an ALB fails open when *every* target is unhealthy — the moment one
+    passed, the rest would have been dropped from rotation. It now accepts
+    200-499, since a 404 from the OTLP endpoint still proves the collector is
+    listening and serving HTTP.
 */}}
-{{- range $svc := list "user-hub" "pathfinder-studio" "ops-agent" }}
-{{- $cfg := index $hc $svc | default dict }}
+{{- range $svc, $cfg := .Values.gateway.healthCheck }}
 ---
 apiVersion: gateway.k8s.aws/v1beta1
 kind: TargetGroupConfiguration
