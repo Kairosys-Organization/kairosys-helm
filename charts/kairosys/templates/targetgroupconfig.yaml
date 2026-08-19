@@ -1,0 +1,38 @@
+{{- if .Values.gateway.enabled }}
+{{- $hc := .Values.gateway.healthCheck | default dict }}
+{{- /*
+  The ALB defaults to health-checking `/` every 15s on every target group. For
+  user-hub that means rendering the full CreditFlow dashboard — and its SQL
+  aggregates — 5,760 times a day purely to prove the container is alive, with
+  every hit producing a ~9-span trace. These configs stretch the interval and,
+  where the backend has a cheap endpoint, point at that instead.
+
+  Note on paths: user-hub does not expose actuator, so `/health` and
+  /actuator/health both 404 there. It therefore keeps `/` and relies on the
+  longer interval, while ops-agent has a real `/health` and uses it.
+*/}}
+{{- range $svc := list "user-hub" "pathfinder-studio" "ops-agent" }}
+{{- $cfg := index $hc $svc | default dict }}
+---
+apiVersion: gateway.k8s.aws/v1beta1
+kind: TargetGroupConfiguration
+metadata:
+  name: {{ $svc }}
+  labels:
+    app: {{ $svc }}
+spec:
+  targetReference:
+    kind: Service
+    name: {{ $svc }}
+  defaultConfiguration:
+    healthCheckConfig:
+      healthCheckProtocol: HTTP
+      healthCheckPath: {{ $cfg.path | default "/" | quote }}
+      healthCheckInterval: {{ $cfg.interval | default 60 }}
+      healthCheckTimeout: {{ $cfg.timeout | default 5 }}
+      healthyThresholdCount: {{ $cfg.healthyThreshold | default 2 }}
+      unhealthyThresholdCount: {{ $cfg.unhealthyThreshold | default 3 }}
+      matcher:
+        httpCode: {{ $cfg.httpCode | default "200-399" | quote }}
+{{- end }}
+{{- end }}

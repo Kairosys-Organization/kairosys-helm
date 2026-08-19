@@ -236,6 +236,24 @@ pathfinderStudio:
 
 gateway:
   enabled: true
+  # ALB target-group health checks. Defaults hit `/` every 15s on every target
+  # group; for user-hub that renders the whole dashboard (and its SQL
+  # aggregates) ~5,760x/day and emits a ~9-span trace each time. Interval is
+  # stretched to 60s, and backends with a real health endpoint use it.
+  healthCheck:
+    user-hub:
+      # No actuator on this image — /health and /actuator/health both 404, so
+      # `/` stays until a cheap endpoint exists. Interval does the work here.
+      path: /
+      interval: 60
+    pathfinder-studio:
+      # nginx serving a static file — cheap, no backend work.
+      path: /
+      interval: 60
+    ops-agent:
+      # Real health endpoint; costs nothing and touches no database.
+      path: /health
+      interval: 60
   # GatewayClass that implements this Gateway (e.g. `alb` from AWS LBC v2.13+).
   gatewayClassName: alb
   scheme: internet-facing

@@ -42,8 +42,20 @@ data:
         decision_wait: 10s
         num_traces: 10000
         policies:
-          - name: always-sample
-            type: always_sample
+          # Drop ALB health-check traces. The load balancer hits `/` on every
+          # target group around the clock; on user-hub that renders the
+          # dashboard and emits ~9 DB spans per check, which is pure noise in
+          # the trace store and in ops-agent's ingest log. invert_match keeps
+          # every trace that is NOT a health check — matching on the root span's
+          # user agent drops the child DB spans with it, rather than orphaning
+          # them the way a span-level filter would.
+          - name: drop-elb-health-checks
+            type: string_attribute
+            string_attribute:
+              key: user_agent.original
+              values: ["ELB-HealthChecker/2.0"]
+              enabled_regex_matching: false
+              invert_match: true
 
     exporters:
       {{- if .Values.jaeger.enabled }}
